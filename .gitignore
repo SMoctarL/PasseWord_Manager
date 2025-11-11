@@ -1,0 +1,18 @@
+# --- Fichiers sensibles ---
+.env
+.env.*
+
+# --- Dossier de base de données ---
+db/
+
+# --- Environnement virtuel ---
+venv/
+__pycache__/
+*.pyc
+
+# --- Fichiers système ---
+.DS_Store
+Thumbs.db
+
+# --- Autres fichiers à ignorer ---
+*.sqlite
