@@ -18,6 +18,9 @@ password-manager/
     ├── main.py              # Point d'entrée principal du programme
     ├── requirements.txt     # Dépendances Python
     └── __pycache__/         # Cache Python (auto-généré)
+
+<img width="1124" height="192" alt="terminal" src="https://github.com/user-attachments/assets/f66c138b-c6d0-4232-93c8-eac3b48829bb" />
+
 ```
 
 ---
