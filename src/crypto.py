@@ -8,13 +8,14 @@ from cryptography.hazmat.backends import default_backend
 
 def generate_salt():
     return os.urandom(16)
-
+# Hachage du mot de passe maître avec le sel
 def hash_master_password(password, salt):
     # SHA256(password + salt)
     salted_password = password.encode() + salt
     hash_obj = hashlib.sha256(salted_password)
     return base64.b64encode(hash_obj.digest())
 
+# Dérivation de la clé AES à partir du master password
 def derive_aes_key(master_password, salt):
     # PBKDF2 avec 100000 itérations
     kdf = PBKDF2HMAC(
@@ -26,6 +27,7 @@ def derive_aes_key(master_password, salt):
     )
     return kdf.derive(master_password.encode())
 
+# Chiffrement des mots de passe
 def encrypt_password(password, aes_key):
     # AES-256 encryption
     iv = os.urandom(16)
@@ -37,7 +39,7 @@ def encrypt_password(password, aes_key):
     encrypted = encryptor.update(padded_password) + encryptor.finalize()
     
     return base64.b64encode(iv + encrypted)
-
+# Déchiffrement des mots de passe
 def decrypt_password(encrypted_data, aes_key):
     # AES-256 decryption
     data = base64.b64decode(encrypted_data)

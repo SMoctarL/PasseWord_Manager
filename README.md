@@ -19,14 +19,16 @@ password-manager/
     ├── requirements.txt     # Dépendances Python
     └── __pycache__/         # Cache Python (auto-généré)
 ```
+
 ![Aperçu de l'application](assets/terminal.png)
+
 ---
 
 ## ⚙️ Installation
 
 ### 1️⃣ Cloner le projet
 ```bash
-https://github.com/SMoctarL/PasseWord_Manager.git
+git clone https://github.com/SMoctarL/PasseWord_Manager.git
 cd password-manager/src
 ```
 
@@ -66,6 +68,26 @@ python main.py -u <USERNAME> -a <LABEL> <PASSWORD>
 python main.py -u <USERNAME> -s <LABEL>
 ```
 
+### ✏️ Modifier un mot de passe
+```bash
+python main.py -u <USERNAME> -m <LABEL>
+```
+
+### 🗑️ Supprimer un mot de passe
+```bash
+python main.py -u <USERNAME> -d <LABEL>
+```
+
+### ⚠️ Supprimer un utilisateur
+```bash
+python main.py -u <USERNAME> --delete-user
+```
+
+### 📊 Lister tous les utilisateurs
+```bash
+python main.py -l
+```
+
 ---
 
 ## 🧠 Fonctionnement interne
@@ -73,22 +95,68 @@ python main.py -u <USERNAME> -s <LABEL>
 | Module | Rôle |
 |--------|------|
 | **crypto.py** | Gère le chiffrement AES-256 (CBC) et la dérivation de clé PBKDF2. |
-| **database.py** | Initialise et gère la base SQLite. Stocke les utilisateurs et mots de passe chiffrés. |
-| **cli.py** | Fournit l’interface utilisateur via la ligne de commande (argparse). |
-| **main.py** | Point d’entrée du programme, relie tout le système. |
+| **database.py** | Initialise et gère la base SQLite. Stocke les utilisateurs, mots de passe chiffrés et tentatives de connexion. |
+| **cli.py** | Fournit l'interface utilisateur via la ligne de commande (argparse). |
+| **main.py** | Point d'entrée du programme, relie tout le système. |
 
 ---
 
 ## 🔒 Sécurité intégrée
 
+### Cryptographie
 - 🔑 **Hachage SHA-256** du mot de passe maître (avec salt unique).
 - 🔐 **Chiffrement AES-256 (CBC)** des mots de passe stockés.
 - 🧂 **Salt aléatoire** généré pour chaque utilisateur et mot de passe.
-- 🚫 Aucun mot de passe en clair n’est stocké dans la base de données.
+- 🔄 **PBKDF2** avec 100 000 itérations pour la dérivation de clés.
+- 🚫 Aucun mot de passe en clair n'est stocké dans la base de données.
+
+### Protections supplémentaires
+- 🛡️ **Confirmation double** du mot de passe lors de l'inscription et modification.
+- ⚠️ **Détection de réutilisation** : Alerte si un mot de passe existe déjà pour un autre label.
+- 🔐 **Limitation des tentatives** : Blocage temporaire après 3 échecs de connexion (15 minutes).
+- 🗝️ **Confirmation renforcée** pour la suppression d'utilisateur (retaper le nom d'utilisateur).
 
 ---
 
-## 👨‍💻 Auteur
+## 📋 Fonctionnalités
 
-**Sidy Moctar LO**  
-💼 Étudiant en informatique — Passionné par la cybersécurité, l’intelligence artificielle et l’automatisation.
+- ✅ Inscription et authentification des utilisateurs
+- ✅ Ajout de mots de passe pour un label (avec confirmation de saisi)
+- ✅ modification de mots de passe pour un label
+- ✅ suppression de mots de passe pour un label
+- ✅ Affichage sécurisé des mots de passe
+- ✅ Liste complète des utilisateurs et leurs labels
+- ✅ Détection automatique de la réutilisation de mots de passe dans deux labels differentes afin d'augmenter la sécurité
+- ✅ Interface en couleurs pour une meilleure lisibilité
+- ✅ Statistiques du système (nombre d'utilisateurs, labels, etc.)
+
+---
+
+## 📝 Exemples
+
+### Workflow complet
+```bash
+# Créer un utilisateur
+python main.py -r john
+
+# Ajouter des mots de passe
+python main.py -u john -a email Pass123
+python main.py -u john -a facebook SecurePass456
+
+# Lister les utilisateurs
+python main.py -l
+
+# Afficher un mot de passe
+python main.py -u john -s email
+
+# Modifier un mot de passe
+python main.py -u john -m email
+
+# Supprimer un mot de passe
+python main.py -u john -d facebook
+
+# Supprimer l'utilisateur
+python main.py -u john --delete-user
+```
+
+---
