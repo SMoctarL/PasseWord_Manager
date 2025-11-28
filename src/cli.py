@@ -3,6 +3,7 @@ import getpass
 import sys
 from datetime import datetime
 from database import init_db, register_user, verify_user, add_password, get_password, update_password, check_password_reuse, is_user_locked, record_login_attempt, reset_login_attempts, delete_password, delete_user, get_all_users_with_labels
+from password_utils import validate_password_strength
 
 class Colors:
     RED = '\033[91m'
@@ -133,10 +134,23 @@ def print_usage():
 """
     print(usage)
 
-def confirm_password_input(prompt_text):
+def confirm_password_input(prompt_text, validate_strength=False):
     """Demande à l'utilisateur de taper le mot de passe deux fois pour confirmation"""
     while True:
         password1 = getpass.getpass(f'{Colors.YELLOW}🔒 {prompt_text}: {Colors.END}')
+        
+        # Valider la force du mot de passe si demandé
+        if validate_strength:
+            is_valid, message = validate_password_strength(password1)
+            if not is_valid:
+                print_error(message)
+                retry = input(f"{Colors.YELLOW}Voulez-vous réessayer? (y/n): {Colors.END}").lower().strip()
+                if retry != 'y' and retry != 'yes':
+                    return None
+                continue
+            else:
+                print_success(message)
+        
         password2 = getpass.getpass(f'{Colors.YELLOW}🔒 Confirmez le mot de passe: {Colors.END}')
         
         if password1 == password2:
@@ -233,7 +247,11 @@ def main():
     if args.register:
         print(f"\n{Colors.CYAN}{Colors.BOLD}📝 INSCRIPTION NOUVEL UTILISATEUR{Colors.END}")
         print(f"{Colors.WHITE}Utilisateur: {Colors.BOLD}{args.register}{Colors.END}")
-        master_password = confirm_password_input(f'Entrez le master password pour {args.register}')
+        master_password = confirm_password_input(f'Entrez le master password pour {args.register}', validate_strength=True)
+        
+        if master_password is None:
+            print_info("Inscription annulée.")
+            return
         
         if register_user(args.register, master_password):
             print_success(f"Utilisateur {args.register} inscrit avec succès!")
@@ -282,7 +300,7 @@ def main():
             # Vérification de la réutilisation du mot de passe
             if check_and_warn_password_reuse(args.user, new_password, master_password, exclude_label=args.modify):
                 if update_password(args.user, args.modify, new_password, master_password):
-                    print_success(f"Mot de passe '{args.modify}' modifié avec succès!")
+                    print_success(f"Mot de passe du label '{args.modify}' modifié avec succès!")
                 else:
                     print_error("Erreur: Impossible de modifier le mot de passe!")
             else:
@@ -327,9 +345,9 @@ def main():
             
             if confirmation == 'y' or confirmation == 'yes':
                 if delete_password(args.user, args.delete):
-                    print_success(f"Mot de passe '{args.delete}' supprimé avec succès!")
+                    print_success(f"LE mot de passe et le label '{args.delete}' ont été supprimés avec succès!")
                 else:
-                    print_error("Erreur: Impossible de supprimer le mot de passe!")
+                    print_error("Erreur: Impossible de supprimer ce label!")
             else:
                 print_info("Opération annulée.")
         else:
