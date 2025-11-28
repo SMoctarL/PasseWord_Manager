@@ -282,7 +282,8 @@ def parse_import_file(filepath):
     except Exception as e:
         print_error(f"Erreur lors de la lecture du fichier: {str(e)}")
         return None
-
+    
+# Importer des mots de passe depuis un fichier 'CSV ou TXT'
 def import_passwords_from_file(username, filepath, master_password, skip_duplicates=False):
     """Importe des mots de passe depuis un fichier CSV ou TXT"""
     print(f"\n{Colors.CYAN}{Colors.BOLD}📥 IMPORT DE MOTS DE PASSE{Colors.END}")
