@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import sys
+import csv
 from datetime import datetime
 from database import init_db, register_user, verify_user, add_password, get_password, update_password, check_password_reuse, is_user_locked, record_login_attempt, reset_login_attempts, delete_password, delete_user, get_all_users_with_labels
 from password_utils import validate_password_strength
@@ -17,13 +18,14 @@ class Colors:
     UNDERLINE = '\033[4m'
     END = '\033[0m'
 
+# Affichage de la bannière
 def print_banner():
     banner = f"""
 {Colors.CYAN}{Colors.BOLD}
-╔══════════════════════════════════════════════╗
+╔═══════════════════════════════════════════════╗
 ║         -GESTIONNAIRE DE MOTS DE PASSE       ║
 ║         -PASSWORD MANAGER                    ║
-╚══════════════════════════════════════════════╝
+╚═══════════════════════════════════════════════╝
 {Colors.END}
 """
     print(banner)
@@ -108,6 +110,10 @@ def print_usage():
 {Colors.CYAN}Ajouter un mot de passe pour un Label:{Colors.END}
   {Colors.WHITE}python main.py -u {Colors.BOLD}username{Colors.END} -a {Colors.BOLD}label mot_de_passe{Colors.END}
 
+{Colors.CYAN}Importer des mots de passe depuis un fichier:{Colors.END}
+  {Colors.WHITE}python main.py -u {Colors.BOLD}username{Colors.END} -i {Colors.BOLD}fichier.csv{Colors.END}
+  {Colors.WHITE}python main.py -u {Colors.BOLD}username{Colors.END} --import {Colors.BOLD}fichier.txt{Colors.END}
+
 {Colors.CYAN}Modifier un mot de passe existant:{Colors.END}
   {Colors.WHITE}python main.py -u {Colors.BOLD}username{Colors.END} -m {Colors.BOLD}label{Colors.END}
 
@@ -123,9 +129,14 @@ def print_usage():
 {Colors.CYAN}Lister tous les utilisateurs et leurs labels:{Colors.END}
   {Colors.WHITE}python main.py -l{Colors.END} ou {Colors.WHITE}python main.py --list{Colors.END}
 
+{Colors.CYAN}Format des fichiers d'import:{Colors.END}
+  {Colors.WHITE}CSV: label,password (une ligne par mot de passe)
+  TXT: label:password (une ligne par mot de passe){Colors.END}
+
 {Colors.CYAN}Exemples:{Colors.END}
   {Colors.WHITE}python main.py -r john{Colors.END}
   {Colors.WHITE}python main.py -u john -a email MonSuperPass123{Colors.END}
+  {Colors.WHITE}python main.py -u john -i passwords.csv{Colors.END}
   {Colors.WHITE}python main.py -u john -m email{Colors.END}
   {Colors.WHITE}python main.py -u john -s email{Colors.END}
   {Colors.WHITE}python main.py -u john -d email{Colors.END}
@@ -137,7 +148,7 @@ def print_usage():
 def confirm_password_input(prompt_text, validate_strength=False):
     """Demande à l'utilisateur de taper le mot de passe deux fois pour confirmation"""
     while True:
-        password1 = getpass.getpass(f'{Colors.YELLOW}🔒 {prompt_text}: {Colors.END}')
+        password1 = getpass.getpass(f'{Colors.YELLOW}🔑 {prompt_text}: {Colors.END}')
         
         # Valider la force du mot de passe si demandé
         if validate_strength:
@@ -151,7 +162,7 @@ def confirm_password_input(prompt_text, validate_strength=False):
             else:
                 print_success(message)
         
-        password2 = getpass.getpass(f'{Colors.YELLOW}🔒 Confirmez le mot de passe: {Colors.END}')
+        password2 = getpass.getpass(f'{Colors.YELLOW}🔑 Confirmez le mot de passe: {Colors.END}')
         
         if password1 == password2:
             return password1
@@ -171,6 +182,7 @@ def check_and_warn_password_reuse(username, password, master_password, exclude_l
     
     return True
 
+# Vérification de l'utilisateur avec protection contre les tentatives multiples
 def verify_user_with_lockout(username, master_password):
     """Vérifie l'utilisateur avec protection contre les tentatives multiples"""
     # Vérifier si l'utilisateur est bloqué
@@ -215,12 +227,124 @@ def verify_user_with_lockout(username, master_password):
         
         return False
 
+# Obtenir la connexion à la base de données
 def get_db_connection():
     """Importe la fonction depuis database.py"""
     import sqlite3
     conn = sqlite3.connect('../db/data.sqlite')
     return conn
 
+def parse_import_file(filepath):
+    """Parse un fichier CSV ou TXT et retourne une liste de tuples (label, password)"""
+    passwords_data = []
+    file_extension = filepath.lower().split('.')[-1]
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8') as file:
+            if file_extension == 'csv':
+                # Format CSV: label,password
+                csv_reader = csv.reader(file)
+                for line_num, row in enumerate(csv_reader, 1):
+                    if len(row) >= 2:
+                        label = row[0].strip()
+                        password = row[1].strip()
+                        if label and password:
+                            passwords_data.append((label, password, line_num))
+                    elif len(row) == 1 and row[0].strip():
+                        print_warning(f"Ligne {line_num}: Format invalide (mot de passe manquant)")
+            
+            elif file_extension == 'txt':
+                # Format TXT: label:password
+                for line_num, line in enumerate(file, 1):
+                    line = line.strip()
+                    if not line or line.startswith('#'):  # Ignorer lignes vides et commentaires
+                        continue
+                    
+                    if ':' in line:
+                        parts = line.split(':', 1)
+                        label = parts[0].strip()
+                        password = parts[1].strip()
+                        if label and password:
+                            passwords_data.append((label, password, line_num))
+                    else:
+                        print_warning(f"Ligne {line_num}: Format invalide (séparateur ':' manquant)")
+            
+            else:
+                print_error(f"Format de fichier non supporté: .{file_extension}")
+                print_info("Formats acceptés: .csv, .txt")
+                return None
+        
+        return passwords_data
+    
+    except FileNotFoundError:
+        print_error(f"Fichier non trouvé: {filepath}")
+        return None
+    except Exception as e:
+        print_error(f"Erreur lors de la lecture du fichier: {str(e)}")
+        return None
+
+def import_passwords_from_file(username, filepath, master_password, skip_duplicates=False):
+    """Importe des mots de passe depuis un fichier CSV ou TXT"""
+    print(f"\n{Colors.CYAN}{Colors.BOLD}📥 IMPORT DE MOTS DE PASSE{Colors.END}")
+    print(f"{Colors.WHITE}Fichier: {Colors.BOLD}{filepath}{Colors.END}")
+    print(f"{Colors.WHITE}Utilisateur: {Colors.BOLD}{username}{Colors.END}\n")
+    
+    # Parser le fichier
+    passwords_data = parse_import_file(filepath)
+    
+    if passwords_data is None:
+        return
+    
+    if not passwords_data:
+        print_warning("Aucun mot de passe valide trouvé dans le fichier.")
+        return
+    
+    print_info(f"Trouvé {len(passwords_data)} mot(s) de passe à importer.")
+    
+    # Demander confirmation
+    response = input(f"{Colors.YELLOW}Voulez-vous continuer l'import? (y/n): {Colors.END}").lower().strip()
+    if response != 'y' and response != 'yes':
+        print_info("Import annulé.")
+        return
+    
+    # Statistiques
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+    
+    # Importer chaque mot de passe
+    for label, password, line_num in passwords_data:
+        try:
+            # Vérifier la réutilisation si demandé
+            if not skip_duplicates:
+                duplicate_labels = check_password_reuse(username, password, master_password)
+                if duplicate_labels:
+                    print_warning(f"Ligne {line_num} - '{label}': Mot de passe déjà utilisé pour {', '.join(duplicate_labels)}")
+                    skipped_count += 1
+                    continue
+            
+            # Ajouter le mot de passe
+            if add_password(username, label, password, master_password):
+                print_success(f"Ligne {line_num} - '{label}': Importé avec succès")
+                success_count += 1
+            else:
+                print_error(f"Ligne {line_num} - '{label}': Échec (label peut-être déjà existant)")
+                failed_count += 1
+        
+        except Exception as e:
+            print_error(f"Ligne {line_num} - '{label}': Erreur - {str(e)}")
+            failed_count += 1
+    
+    # Résumé
+    print(f"\n{Colors.CYAN}{Colors.BOLD}📊 RÉSUMÉ DE L'IMPORT{Colors.END}")
+    print(f"{Colors.GREEN}✅ Succès: {success_count}{Colors.END}")
+    if failed_count > 0:
+        print(f"{Colors.RED}❌ Échecs: {failed_count}{Colors.END}")
+    if skipped_count > 0:
+        print(f"{Colors.YELLOW}⏭️  Ignorés (réutilisation): {skipped_count}{Colors.END}")
+    print(f"{Colors.BOLD}Total: {len(passwords_data)}{Colors.END}\n")
+
+# Fonction principale
 def main():
     print_banner()
     init_db()
@@ -230,6 +354,8 @@ def main():
     parser.add_argument('-r', '--register', metavar='USERNAME', help='Inscrire un nouvel utilisateur')
     parser.add_argument('-u', '--user', metavar='USERNAME', help="Nom d'utilisateur pour les opérations")
     parser.add_argument('-a', '--add', nargs=2, metavar=('LABEL', 'PASSWORD'), help='Ajouter un mot de passe: -a label mot_de_passe')
+    parser.add_argument('-i', '--import', dest='import_file', metavar='FILE', help='Importer des mots de passe depuis un fichier CSV ou TXT')
+    parser.add_argument('--skip-duplicates', action='store_true', help="Ignorer l'avertissement de réutilisation lors de l'import")
     parser.add_argument('-m', '--modify', metavar='LABEL', help='Modifier un mot de passe existant: -m label')
     parser.add_argument('-s', '--show', metavar='LABEL', help='Afficher un mot de passe: -s label')
     parser.add_argument('-d', '--delete', metavar='LABEL', help='Supprimer un mot de passe: -d label')
@@ -258,6 +384,15 @@ def main():
         else:
             print_error("Erreur: Cet utilisateur existe déjà!")
     
+    # Mode import de fichier
+    elif args.user and args.import_file:
+        master_password = getpass.getpass(f'{Colors.YELLOW}🔑 Entrez le master password pour {args.user}: {Colors.END}')
+        
+        if verify_user_with_lockout(args.user, master_password):
+            import_passwords_from_file(args.user, args.import_file, master_password, args.skip_duplicates)
+        else:
+            print_error("Erreur: Master password invalide ou utilisateur non trouvé!")
+    
     # Mode ajout de mot de passe
     elif args.user and args.add:
         print(f"\n{Colors.CYAN}{Colors.BOLD}➕ AJOUT D'UN MOT DE PASSE{Colors.END}")
@@ -265,7 +400,7 @@ def main():
         label, password = args.add
         print(f"{Colors.WHITE}Label: {Colors.BOLD}{label}{Colors.END}")
         
-        master_password = getpass.getpass(f'{Colors.YELLOW}🔒 Entrez le master password pour {args.user}: {Colors.END}')
+        master_password = getpass.getpass(f'{Colors.YELLOW}🔑 Entrez le master password pour {args.user}: {Colors.END}')
         
         if verify_user_with_lockout(args.user, master_password):
             # Vérification de la réutilisation du mot de passe
@@ -285,7 +420,7 @@ def main():
         print(f"{Colors.WHITE}Utilisateur: {Colors.BOLD}{args.user}{Colors.END}")
         print(f"{Colors.WHITE}Label: {Colors.BOLD}{args.modify}{Colors.END}")
         
-        master_password = getpass.getpass(f'{Colors.YELLOW}🔒 Entrez le master password pour {args.user}: {Colors.END}')
+        master_password = getpass.getpass(f'{Colors.YELLOW}🔑 Entrez le master password pour {args.user}: {Colors.END}')
         
         if verify_user_with_lockout(args.user, master_password):
             # Vérifier que le label existe
@@ -314,7 +449,7 @@ def main():
         print(f"{Colors.WHITE}Utilisateur: {Colors.BOLD}{args.user}{Colors.END}")
         print(f"{Colors.WHITE}Label: {Colors.BOLD}{args.show}{Colors.END}")
         
-        master_password = getpass.getpass(f'{Colors.YELLOW}🔒 Entrez le master password pour {args.user}: {Colors.END}')
+        master_password = getpass.getpass(f'{Colors.YELLOW}🔑 Entrez le master password pour {args.user}: {Colors.END}')
         
         if verify_user_with_lockout(args.user, master_password):
             password = get_password(args.user, args.show, master_password)
@@ -331,7 +466,7 @@ def main():
         print(f"{Colors.WHITE}Utilisateur: {Colors.BOLD}{args.user}{Colors.END}")
         print(f"{Colors.WHITE}Label: {Colors.BOLD}{args.delete}{Colors.END}")
         
-        master_password = getpass.getpass(f'{Colors.YELLOW}🔒 Entrez le master password pour {args.user}: {Colors.END}')
+        master_password = getpass.getpass(f'{Colors.YELLOW}🔑 Entrez le master password pour {args.user}: {Colors.END}')
         
         if verify_user_with_lockout(args.user, master_password):
             # Vérifier que le label existe
@@ -358,7 +493,7 @@ def main():
         print(f"\n{Colors.CYAN}{Colors.BOLD}⚠️  SUPPRESSION D'UTILISATEUR{Colors.END}")
         print(f"{Colors.WHITE}Utilisateur: {Colors.BOLD}{args.user}{Colors.END}")
         
-        master_password = getpass.getpass(f'{Colors.YELLOW}🔒 Entrez le master password pour {args.user}: {Colors.END}')
+        master_password = getpass.getpass(f'{Colors.YELLOW}🔑 Entrez le master password pour {args.user}: {Colors.END}')
         
         if verify_user_with_lockout(args.user, master_password):
             print_warning(f"ATTENTION: Vous êtes sur le point de supprimer l'utilisateur '{args.user}'")

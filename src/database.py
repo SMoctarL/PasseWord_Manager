@@ -9,6 +9,7 @@ def get_db_connection():
     conn = sqlite3.connect('../db/data.sqlite')
     return conn
 
+# initialisation de la base de données
 def init_db():
     os.makedirs('db', exist_ok=True)
     conn = get_db_connection()
@@ -47,6 +48,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Fonction pour enregistrer un nouvel utilisateur
 def register_user(username, master_password):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -66,6 +68,7 @@ def register_user(username, master_password):
     finally:
         conn.close()
 
+# Fonction pour vérifier les informations de connexion de l'utilisateur
 def verify_user(username, master_password):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -83,6 +86,7 @@ def verify_user(username, master_password):
     
     return computed_hash.decode() == stored_hash
 
+# Fonction pour ajouter un mot de passe chiffré
 def add_password(username, label, password, master_password):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -112,6 +116,7 @@ def add_password(username, label, password, master_password):
         conn.close()
         return False
 
+# Fonction pour récupérer et déchiffrer un mot de passe
 def get_password(username, label, master_password):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -135,7 +140,7 @@ def get_password(username, label, master_password):
     
     return decrypt_password(encrypted_password, aes_key)
 
-# NOUVELLE FONCTION: Modifier un mot de passe existant
+# Modifier un mot de passe existant
 def update_password(username, label, new_password, master_password):
     """Met à jour le mot de passe d'un label existant"""
     conn = get_db_connection()
@@ -169,7 +174,7 @@ def update_password(username, label, new_password, master_password):
     conn.close()
     return True
 
-# NOUVELLE FONCTION: Vérifier si un mot de passe existe déjà pour un autre label
+# Vérifier si un mot de passe existe déjà pour un autre label
 def check_password_reuse(username, new_password, master_password, exclude_label=None):
     """Vérifie si le mot de passe est déjà utilisé pour un autre label
     Retourne la liste des labels qui utilisent ce mot de passe"""
@@ -202,7 +207,7 @@ def check_password_reuse(username, new_password, master_password, exclude_label=
     
     return duplicate_labels
 
-# NOUVELLE FONCTION: Supprimer un mot de passe (label)
+# Supprimer un label (et son mot de passe associé)
 def delete_password(username, label):
     """Supprime un mot de passe associé à un label"""
     conn = get_db_connection()
@@ -220,7 +225,7 @@ def delete_password(username, label):
     
     return rows_deleted > 0
 
-# NOUVELLE FONCTION: Supprimer un utilisateur et tous ses mots de passe
+# Supprimer un utilisateur et tous ses mots de passe
 def delete_user(username):
     """Supprime un utilisateur et tous ses mots de passe associés"""
     conn = get_db_connection()
@@ -253,7 +258,7 @@ def delete_user(username):
         conn.close()
         return False
 
-# NOUVELLE FONCTION: Lister tous les utilisateurs
+# Lister tous les utilisateurs
 def list_all_users():
     """Récupère la liste de tous les utilisateurs"""
     conn = get_db_connection()
@@ -265,7 +270,7 @@ def list_all_users():
     
     return [user[0] for user in users]
 
-# NOUVELLE FONCTION: Lister tous les labels d'un utilisateur
+# Lister tous les labels d'un utilisateur
 def list_user_labels(username):
     """Récupère tous les labels associés à un utilisateur"""
     conn = get_db_connection()
@@ -284,7 +289,7 @@ def list_user_labels(username):
     
     return [label[0] for label in labels]
 
-# NOUVELLE FONCTION: Obtenir toutes les données pour l'affichage tableau
+# Obtenir toutes les données pour l'affichage tableau
 def get_all_users_with_labels():
     """Récupère tous les utilisateurs avec leurs labels pour affichage en tableau"""
     conn = get_db_connection()
@@ -303,7 +308,7 @@ def get_all_users_with_labels():
     
     return results
 
-# NOUVELLE FONCTION: Vérifier si l'utilisateur est bloqué
+# Vérifier si l'utilisateur est bloqué
 def is_user_locked(username, max_attempts=3, lockout_duration_minutes=15):
     """Vérifie si l'utilisateur est temporairement bloqué après plusieurs tentatives échouées"""
     conn = get_db_connection()
@@ -346,7 +351,7 @@ def is_user_locked(username, max_attempts=3, lockout_duration_minutes=15):
     conn.close()
     return False, 0
 
-# NOUVELLE FONCTION: Enregistrer une tentative de connexion
+# Enregistrer une tentative de connexion
 def record_login_attempt(username, success):
     """Enregistre une tentative de connexion (réussie ou échouée)"""
     conn = get_db_connection()
@@ -359,7 +364,7 @@ def record_login_attempt(username, success):
     conn.commit()
     conn.close()
 
-# NOUVELLE FONCTION: Réinitialiser les tentatives après une connexion réussie
+# Réinitialiser les tentatives après une connexion réussie
 def reset_login_attempts(username):
     """Efface les tentatives échouées après une connexion réussie"""
     conn = get_db_connection()
